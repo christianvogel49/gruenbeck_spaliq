@@ -59,11 +59,12 @@ class GruenbeckCoordinator(DataUpdateCoordinator):
         ourselves and parse register data from bytes 9–50 of the response.
         """
         count = 20
-        start = 1  # device uses 1-based PDU addressing; PDU 1–20 maps to regs[0..19]
-        # Standard Modbus TCP read-holding-registers request (12 bytes):
+        start = 0
+        func = 4  # 0x04 = Read Input Registers (sensor/measurement data is read-only)
+        # Standard Modbus TCP request (12 bytes):
         #   MBAP: trans_id=1, proto_id=0, length=6
-        #   PDU:  unit_id, func=3, start_addr, quantity
-        request = struct.pack(">HHHBBHH", 1, 0, 6, self._unit_id, 3, start, count)
+        #   PDU:  unit_id, func, start_addr, quantity
+        request = struct.pack(">HHHBBHH", 1, 0, 6, self._unit_id, func, start, count)
 
         try:
             with socket.create_connection((self._host, self._port), timeout=10) as sock:
@@ -100,8 +101,8 @@ class GruenbeckCoordinator(DataUpdateCoordinator):
             )
 
         func_code = data[7]
-        if func_code != 0x03:
-            raise UpdateFailed(f"Unexpected function code: 0x{func_code:02x} (expected 0x03)")
+        if func_code not in (0x03, 0x04):
+            raise UpdateFailed(f"Unexpected function code: 0x{func_code:02x}")
 
         regs_raw = data[9 : 9 + count * 2]
         return [struct.unpack(">H", regs_raw[i * 2 : i * 2 + 2])[0] for i in range(count)]
