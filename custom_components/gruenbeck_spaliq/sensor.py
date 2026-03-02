@@ -36,7 +36,7 @@ async def async_setup_entry(
             )
         )
 
-    for label, key, _reg, _scale, _raw_offset, unit, dc_str in INT16_REGISTERS:
+    for label, key, _reg, _scale, unit, dc_str in INT16_REGISTERS:
         device_class = SensorDeviceClass(dc_str) if dc_str else None
         entities.append(
             GruenbeckSensor(
