@@ -58,11 +58,12 @@ class GruenbeckCoordinator(DataUpdateCoordinator):
         both of which cause pymodbus to reject the frame.  We build the request
         ourselves and parse register data from bytes 9–50 of the response.
         """
-        count = 20  # registers 0–19; register 20 is reserved and not present on all units
+        count = 20
+        start = 1  # device uses 1-based PDU addressing; PDU 1–20 maps to regs[0..19]
         # Standard Modbus TCP read-holding-registers request (12 bytes):
         #   MBAP: trans_id=1, proto_id=0, length=6
-        #   PDU:  unit_id, func=3, start_addr=0, quantity=21
-        request = struct.pack(">HHHBBHH", 1, 0, 6, self._unit_id, 3, 0, count)
+        #   PDU:  unit_id, func=3, start_addr, quantity
+        request = struct.pack(">HHHBBHH", 1, 0, 6, self._unit_id, 3, start, count)
 
         try:
             with socket.create_connection((self._host, self._port), timeout=10) as sock:
