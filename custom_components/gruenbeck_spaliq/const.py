@@ -17,14 +17,23 @@ DINT_REGISTERS = [
 ]
 
 # 16-bit analog measurements.
-# Each entry: (friendly_name, key, register, scale, unit, ha_device_class)
+# Each entry: (friendly_name, key, register, scale, raw_offset, unit, ha_device_class)
+# Decoded as: actual = (decode_int16(raw) - raw_offset) / scale
+#
+# The device stores every value as (actual − physical_minimum) × scale so that
+# the raw register is always non-negative.  raw_offset = physical_minimum × scale.
+# Confirmed against live device display (2026-03-02):
+#   water_temperature: raw 238 → (238 − 125) ÷ 10 = 11.3 °C ✓
+#   disinfection_value: raw 177 → (177 − 150) ÷ 100 = 0.27 mg/L ✓
+#   ph_value: raw 250 → (250 − (−500)) ÷ 100 = 7.50 pH (sensor min ≈ pH 5.00)
+#   redox_value: raw_offset inferred from physical plausibility (min ≈ 500 mV)
 INT16_REGISTERS = [
-    ("pH-Wert Beckenwasser",       "ph_value",          8,  100, "pH",   None),
-    ("Desinfektionswert",          "disinfection_value", 9,  100, "mg/L", None),
-    ("Redox-Wert",                 "redox_value",        10,   1, "mV",   None),
-    ("Wassertemperatur",           "water_temperature",  11,  10, "°C",   "temperature"),
-    ("Raumtemperatur/Luftfeuchte", "room_sensor_1",      14,  10, "°C",   "temperature"),
-    ("Raumtemperatur/Luftfeuchte", "room_sensor_2",      15,  10, "°C",   "temperature"),
+    ("pH-Wert Beckenwasser",       "ph_value",          8,  100, -500, "pH",   None),
+    ("Desinfektionswert",          "disinfection_value", 9,  100,  150, "mg/L", None),
+    ("Redox-Wert",                 "redox_value",        10,   1, -500, "mV",   None),
+    ("Wassertemperatur",           "water_temperature",  11,  10,  125, "°C",   "temperature"),
+    ("Raumtemperatur/Luftfeuchte", "room_sensor_1",      14,  10,  125, "°C",   "temperature"),
+    ("Raumtemperatur/Luftfeuchte", "room_sensor_2",      15,  10,  125, "°C",   "temperature"),
 ]
 
 # Bit-field status/alarm/fault words.

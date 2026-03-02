@@ -110,17 +110,14 @@ class GruenbeckCoordinator(DataUpdateCoordinator):
     def _decode(self, regs: list[int]) -> dict:
         result: dict = {}
 
-        # Temporary diagnostic: log all raw register values so we can
-        # cross-reference with the device display and verify the register map.
-        for i, v in enumerate(regs):
-            _LOGGER.warning("reg[%02d] = %5d  (0x%04x, signed %d)", i, v, v, decode_int16(v))
-
+        # DInt: device sends low word first (little-endian word order).
         for _label, key, start in DINT_REGISTERS:
-            result[key] = decode_dint(regs[start], regs[start + 1])
+            result[key] = decode_dint(regs[start + 1], regs[start])
 
-        for _label, key, reg, scale, _unit, _dc in INT16_REGISTERS:
+        # Int16: actual = (signed_raw − raw_offset) / scale
+        for _label, key, reg, scale, raw_offset, _unit, _dc in INT16_REGISTERS:
             raw = decode_int16(regs[reg])
-            result[key] = raw / scale if scale != 1 else raw
+            result[key] = (raw - raw_offset) / scale
 
         for reg, bit, key, _label, _dc in BIT_REGISTERS:
             result[key] = get_bit(regs[reg], bit)
