@@ -82,15 +82,23 @@ class GruenbeckCoordinator(DataUpdateCoordinator):
                 f"Cannot connect to Modbus device at {self._host}:{self._port} — {exc}"
             ) from exc
 
+        _LOGGER.debug("Raw Modbus response (%d bytes): %s", len(data), data.hex())
+
+        # A Modbus exception response is exactly 9 bytes — check before the length guard.
+        if len(data) >= 9 and data[7] & 0x80:
+            raise UpdateFailed(
+                f"Modbus exception from device: func=0x{data[7]:02x}, "
+                f"exception_code=0x{data[8]:02x} (raw: {data.hex()})"
+            )
+
         expected = 9 + count * 2  # 51 bytes
         if len(data) < expected:
             raise UpdateFailed(
-                f"Short response from device: {len(data)} bytes (expected {expected})"
+                f"Short response from device: {len(data)} bytes (expected {expected}) "
+                f"(raw: {data.hex()})"
             )
 
         func_code = data[7]
-        if func_code & 0x80:
-            raise UpdateFailed(f"Modbus exception response, error code 0x{data[8]:02x}")
         if func_code != 0x03:
             raise UpdateFailed(f"Unexpected function code: 0x{func_code:02x} (expected 0x03)")
 
