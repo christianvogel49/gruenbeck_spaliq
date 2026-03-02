@@ -110,6 +110,11 @@ class GruenbeckCoordinator(DataUpdateCoordinator):
     def _decode(self, regs: list[int]) -> dict:
         result: dict = {}
 
+        # Temporary diagnostic: log all raw register values so we can
+        # cross-reference with the device display and verify the register map.
+        for i, v in enumerate(regs):
+            _LOGGER.info("reg[%02d] = %5d  (0x%04x, signed %d)", i, v, v, decode_int16(v))
+
         for _label, key, start in DINT_REGISTERS:
             result[key] = decode_dint(regs[start], regs[start + 1])
 
