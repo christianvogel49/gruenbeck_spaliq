@@ -1,0 +1,11 @@
+{
+  "domain": "gruenbeck_spaliq",
+  "name": "Grünbeck spaliQ",
+  "version": "1.0.0",
+  "documentation": "https://github.com/christianvogel49/gruenbeck_spaliq",
+  "issue_tracker": "https://github.com/christianvogel49/gruenbeck_spaliq/issues",
+  "codeowners": ["@christianvogel49"],
+  "requirements": [],
+  "iot_class": "local_polling",
+  "config_flow": true
+}
