@@ -58,7 +58,7 @@ class GruenbeckCoordinator(DataUpdateCoordinator):
         both of which cause pymodbus to reject the frame.  We build the request
         ourselves and parse register data from bytes 9–50 of the response.
         """
-        count = 21
+        count = 20  # registers 0–19; register 20 is reserved and not present on all units
         # Standard Modbus TCP read-holding-registers request (12 bytes):
         #   MBAP: trans_id=1, proto_id=0, length=6
         #   PDU:  unit_id, func=3, start_addr=0, quantity=21
