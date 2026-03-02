@@ -1,0 +1,31 @@
+services:
+
+  # Local MQTT broker
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./test/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-W", "3"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # The addon itself — built from our Dockerfile using a plain Python base
+  # (bypasses bashio, which only exists inside the HA supervisor)
+  addon:
+    build:
+      context: .
+      args:
+        BUILD_FROM: python:3.12-slim
+    command: python3 /app/main.py
+    volumes:
+      - ./data:/data:ro
+    environment:
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: on-failure
