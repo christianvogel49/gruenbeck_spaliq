@@ -4,61 +4,71 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Home Assistant addon that bridges a Grünbeck spaliQ Professional pool treatment system to MQTT via Modbus TCP. All application logic lives in `src/main.py`. The addon runs as a Docker container managed by Home Assistant.
+A Home Assistant custom integration (HACS-compatible) that connects a Grünbeck spaliQ Professional pool treatment system directly to Home Assistant via Modbus TCP — no MQTT broker, no Docker addon required.
 
-## Development commands
+## Repository layout
 
-Install dependencies locally (for editing/linting, not running):
-```bash
-pip install -r src/requirements.txt
+```
+custom_components/gruenbeck_spaliq/   # The HA integration
+  __init__.py       — entry point: sets up coordinator + platforms
+  config_flow.py    — UI config flow (host / port / unit_id / poll_interval)
+  coordinator.py    — GruenbeckCoordinator (DataUpdateCoordinator), raw socket Modbus read
+  const.py          — DOMAIN, register lists (DINT / INT16 / BIT), decode helpers
+  sensor.py         — CoordinatorEntity subclasses for analog values
+  binary_sensor.py  — CoordinatorEntity subclasses for bit-field flags
+  manifest.json     — integration metadata
+  translations/     — UI strings
+test/
+  modbus_scan.py    — standalone scanner: tries func=3/4 across all register blocks
+  modbus_simulator.py — fake Modbus device for offline development
 ```
 
-**End-to-end test** (starts the addon, a fake Modbus device, and a local MQTT broker):
+## Modbus connection
+
+- Connect via the **Modbus gateway** (e.g. 192.168.1.52), port 502, unit_id 1.
+- Use **function code 0x03** (Read Holding Registers) — the gateway requires this.
+- Read registers 0–20 in a single request (count = 21).
+- The integration uses a raw TCP socket instead of pymodbus because the gateway returns
+  a non-standard MBAP header and an extra trailing byte that pymodbus rejects.
+- Do **not** connect directly to the device IP (192.168.1.123) — it uses func=4 with
+  non-standard encoding and its func=3 returns exception 0x02.
+
+## Register decoding
+
+Three register types, defined as module-level lists in `const.py`:
+
+| List | Registers | Type | Decode |
+|------|-----------|------|--------|
+| `DINT_REGISTERS` | 0–7 | 32-bit signed DInt (operating-hour counters) | `decode_dint(high_word, low_word)` — big-endian, high word first |
+| `INT16_REGISTERS` | 8–15 | 16-bit signed Int with scaling | `decode_int16(raw) / scale` |
+| `BIT_REGISTERS` | 16–19 | Per-bit flags (status / info / alarm / fault) | `get_bit(reg_word, bit)` → `binary_sensor` |
+
+Register 20 (Störmeldung Teil 2) returns exception 0x02 on real hardware — it is not read.
+
+## Development
+
+Install dependencies for linting (the integration itself has no Python requirements outside HA):
 ```bash
-docker compose up --build
+pip install homeassistant voluptuous
 ```
 
-Watch MQTT output in a second terminal:
+Run the Modbus scanner against a live device:
 ```bash
-docker run --rm --network gruenbeck_spaliq_default eclipse-mosquitto:2 \
-  mosquitto_sub -h mosquitto -t "gruenbeck/#" -v
+python3 test/modbus_scan.py 192.168.1.52
 ```
 
-Tear down:
+Run a local fake device for offline testing:
 ```bash
-docker compose down
+python3 test/modbus_simulator.py
 ```
-
-`data/options.json` mirrors the keys in `config.yaml` `options:` and is what Home Assistant injects at `/data/options.json` inside the container. It is gitignored.
-
-## Architecture
-
-The entire bridge is one class, `ModbusBridge` in `src/main.py`, with three responsibilities:
-
-1. **Modbus reading** — connects to the device, reads all 21 registers (0–20) in a single `read_holding_registers` call, then closes the connection. Reconnects on every poll cycle.
-
-2. **Decoding** — three register types require different decoding:
-   - Registers 0–7: 32-bit signed DInt (two consecutive 16-bit words, big-endian high-word-first) — operating hour counters.
-   - Registers 8–15: 16-bit signed Int with scaling — analog sensor values (pH ÷100, temperature ÷10, etc.).
-   - Registers 16–20: 16-bit bit-field words — status, info, alarm, and fault flags, published as `binary_sensor` (`ON`/`OFF`).
-
-3. **MQTT publishing** — numeric values go to `<prefix>/sensor/<name>/state`; binary flags go to `<prefix>/binary_sensor/<name>/state`. On connect, HA auto-discovery configs are published as retained messages to `homeassistant/sensor/gruenbeck_<name>/config` and `homeassistant/binary_sensor/gruenbeck_<name>/config`.
-
-## Register map
-
-Defined as three module-level lists in `src/main.py`:
-- `DINT_REGISTERS` — operating-hour counters (registers 0–7)
-- `INT16_REGISTERS` — analog measurements (registers 8–15); each entry includes its scale divisor
-- `BIT_REGISTERS` — per-bit status/alarm/fault flags (registers 16–20); `device_class="problem"` marks alarm/fault bits
-
-Source: Grünbeck BA_100142280000_de_084_spaliQ Professional manual.
-
-## Scaling notes
-
-Scale factors for Int16 registers are inferred from the documented value ranges (not explicitly stated in the manual). If live values look wrong, compare raw register values to the device display and adjust the `scale` field in `INT16_REGISTERS`.
 
 ## Deploying to Home Assistant
 
-Place this directory under `addons/gruenbeck_spaliq/` in the HA config volume, then install it as a local addon via **Settings → Add-ons → Add-on Store → ⋮ → Check for updates**.
+Copy `custom_components/gruenbeck_spaliq/` into the `custom_components/` directory of your
+HA config volume, then restart Home Assistant and add the integration via
+**Settings → Devices & Services → Add Integration → Grünbeck spaliQ**.
 
-Bump `version` in `config.yaml` for every release and add an entry to `CHANGELOG.md`.
+For HACS: add this repository as a custom repository (type: Integration), then install
+and restart HA.
+
+Bump `version` in `manifest.json` for every release and add an entry to `CHANGELOG.md`.
